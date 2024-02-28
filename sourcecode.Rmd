@@ -1,0 +1,308 @@
+---
+title: "Project 1"
+author: "Ashton Passmore"
+date: "2023-03-26"
+output: pdf_document
+---
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(Lahman)
+```
+
+# Data set information
+
+The data set that I chose for this project is the teams data set from the Lahman
+package.
+
+This data set has 2985 observations and 48 variables and it gives yearly
+statistics for Major League Baseball teams from 1871 - 2021.
+
+The problem I want to solve is I want to know how many home runs each
+team will give up in 2022 based on data from 2005-2021.I'm predicting for 2022 
+because it's not in the data set yet and since the season is over I can manually 
+feed the independent variable information into the model I'm going to make to 
+hopefully accurately predict how many home runs a team will give up in 2022. 
+Afterwards I will check my predictions against the real number of home runs 
+team gave up in 2022 to see how accurate my model is.
+(I'm starting in 2005 because pre 2005 there was a problem in baseball with 
+steroid use and this inflated home runs allowed by a significant margin and 
+all the teams from 2005 are the same teams as today.)
+
+# Cleaning
+
+filter data set to only give data from 2005-2021
+
+```{r}
+revisedTeams <- Teams %>%
+filter(yearID >= 2005)
+head(revisedTeams)
+```
+
+# Exploratory data analysis
+
+plot of revised data frame
+histogram of Home runs allowed to see distribution of the data
+
+```{r}
+g <- ggplot(data = revisedTeams, aes(x = yearID, y = HRA, color = franchID)) +
+  geom_point()
+gg <- ggplot(data = revisedTeams, aes(x = HRA)) +
+  geom_histogram(binwidth = 20, color = "deeppink", fill = "darkblue")
+g
+gg
+```
+After plotting the data I forgot about the 2020 season which was shortened to 60
+games instead of 162 which, gave an unrealistic amount of 0 - 80 home runs
+allowed so we're going to remove that year.
+
+```{r}
+RevisedTeams2 <- filter(revisedTeams, yearID != 2020)
+head(RevisedTeams2)
+```
+
+revised plots with 2020 removed because of the shortened season
+
+```{r}
+g <- ggplot(data = RevisedTeams2, aes(x = yearID, y = HRA, color = franchID)) +
+  geom_point()
+gg <- ggplot(data = RevisedTeams2, aes(x = HRA)) +
+  geom_histogram(binwidth = 20, color = "deeppink", fill = "darkblue")
+g 
+gg
+```
+
+the distribution of Home Runs Allowed looks like a normal distribution maybe
+slightly left skewed.
+
+# Building the model
+I'm using the information out of the book and separating the data into two
+splits. One of the splits is 80% of the data which is our training set
+which will be used to train the model and the other 20% is only used for testing
+our model. The method I'll be using to build the model is step wise linear
+regression.
+
+**setting up the test and training sets**
+
+```{r}
+set.seed(1234)
+# training set w/ 80% of total data
+train <- RevisedTeams2 %>%
+  dplyr::sample_frac(.8)
+# test set with remaining 20% of the data
+test <- dplyr::anti_join(RevisedTeams2, train)
+# checking to make sure everything is good
+nrow(RevisedTeams2)
+nrow(train)
+nrow(test)
+# the number of rows of test and train add up to the number of rows in
+# RevisedTeams2 so we are good.
+```
+**Choosing Independent Variables**
+Our dependent variable is home runs against (HRA) but, what independent
+variables affect our dependent variable?
+
+When looking at the data set any stats that deal with pitching have some sort
+of relevance to home runs against since you can only give up home runs when
+your team is on defense. For my independent variables I'm choosing
+pretty much all of the pitching variables because they could all have an effect
+on home runs against. I'm choosing Wins(W), Losses(L), Runs Against(RA),
+Earned Runs (ER), Earned Run Average (ERA), Complete Games(CG), Shut Outs (SHO),
+Saves(SV), Outs Pitched (IPouts), Hits against (HA), Walks Against (BBA), and
+finally Strike Outs Against (SOA).
+
+```{r}
+fit <- lm(HRA ~ W + L + RA + ER + ERA + CG + SHO + SV + IPouts + HA + BBA + SOA,
+          data = train)
+summary(fit)
+```
+now I'll perform step wise regression to improve the model (get all variables 
+0.05 p values and lower) 
+I got rid of ERA because it was the least significant independent variable
+```{r}
+fit1 <- lm(HRA ~ W + L + RA + ER + CG + SHO + SV + IPouts + HA + BBA + SOA,
+          data = train)
+summary(fit1)
+```
+now I'm just going to continue getting rid of independent variables until all of 
+the independent variables have a p-value of 0.05 or less. Next up to get rid of 
+is IPouts.
+```{r}
+fit2 <- lm(HRA ~ W + L + RA + ER + CG + SHO + SV + HA + BBA + SOA,
+          data = train)
+summary(fit2)
+```
+Getting rid of L
+```{r}
+fit3 <- lm(HRA ~ W + RA + ER + CG + SHO + SV + HA + BBA + SOA,
+          data = train)
+summary(fit3)
+
+```
+getting rid of CG
+```{r}
+fit4 <- lm(HRA ~ W + RA + ER + SHO + SV + HA + BBA + SOA,
+          data = train)
+summary(fit4)
+
+```
+getting rid of RA
+```{r}
+fit4 <- lm(HRA ~ W + ER + SHO + SV + HA + BBA + SOA,
+          data = train)
+summary(fit4)
+```
+getting rid of SV
+```{r}
+fit5 <- lm(HRA ~ W + ER + SHO + HA + BBA + SOA,
+          data = train)
+summary(fit5)
+```
+getting rid of W
+```{r}
+fit6 <- lm(HRA ~ ER + SHO + HA + BBA + SOA,
+          data = train)
+summary(fit6)
+```
+Since fit6 has only independent variables with a p-value of 0.05 or lower it
+is the final fit.
+
+Interpretation 
+The point estimate tells us that when all of the independent = 0 the expected 
+result would be 126 +- 32 (Std. Error).
+
+The t-value is 4 and this is how many standard errors our coefficient is from 0.
+The t-value of 4 tells us that the independent variables are strong predictors
+of HRA.
+
+The Residual Standard error is 16.88 and this is the standard deviation of the 
+residuals and tells us that our data points are going to be more spread out 
+around the regression line.
+
+The R-squared value tells us how well independent variables fit our dependent 
+variables the closer to 1 the better and the closer to 0 is bad. The value of 
+0.7025 is good enough and tells us that about 70% of our outputs can be 
+explained and 30% can't be.
+
+
+**residuals graph**
+residuals tell us how far away our predictions are from the actual value.
+The more normally distributed the residuals are the better our model predicts 
+because the closer to the 0 the more accurate our predictions will be.
+```{r}
+res <- resid(fit6)
+boxplot(res, col = "lightblue", ylab = "residual values")
+plot(fitted(fit6), res, col = "deeppink", xlab = "Home Runs Agianst (HRA)", ylab = "residuals")
+abline(0,0)
+hist(res, col = "green", xlab = "Residuals", main = "Histogram of Residuals")
+```
+The box plot shows us that our model is a good fit for our data because the 
+median seems to be about 0 and Q1 and Q3 look to be the same length our 
+residuals seem to be normally distributed. This is further backed up when 
+looking at the histogram because our data looks normally distributed.
+
+# Data Visualization
+
+Applying Predictive model with the test set
+```{r}
+predictions <- predict(fit6, test)
+head(predictions)
+```
+```{r}
+predictDF <- data.frame(test, predictions)
+RevisedTeams2DF <- select(predictDF, "yearID", "franchID", "HRA", "predictions")
+RevisedTeams2DF$roundedPredictions <- round(RevisedTeams2DF$predictions, 0)
+RevisedTeams2DF$TF <- RevisedTeams2DF$HRA == RevisedTeams2DF$roundedPredictions
+head(RevisedTeams2DF)
+```
+I rounded the predictions to the nearest whole number because you can't have
+fractions of home runs given up.
+
+# Graph of Predictions vs Actual Values Using Test Set
+```{r}
+g <- ggplot(data = RevisedTeams2DF, aes(x = roundedPredictions, y = HRA, col = franchID)) +
+  geom_point() + geom_abline(intercept = 0, slope = 1, color = "red",alpha = 0.5, linewidth = 2)
+g
+```
+our Predictions and the real HRA values appear to have a linear relationship.
+
+# Results
+```{r}
+results <- RevisedTeams2DF %>%
+  group_by(TF) %>%
+  summarize(count = n())
+results
+```
+The model accurately predicted 4/96 of the number of home runs against a team
+had which is only a little over 4% accurate which isn't really that great but 
+good enough to use on 2022 stats to have an idea of how many home runs a team
+will give up in 2022.
+
+# Predicting 2022 HRA using 2022 stats from Baseball Reference
+importing the csv file and cleaning the data set
+```{r}
+# making 2022 dataset manually from Baseball Reference website
+# importing csv file
+Teams2022 <- read.csv("2022 Team Pitching stats MLB.csv", header = T)
+# cleaning the data set
+Teams_2022 <- Teams2022[-(31:32),]
+franchID <- c("ARI", "ATL", "BAL", "BOS", "CHC", "CHW", "CIN", "CLE", "COL", "DET", "HOU", "KCR","ANA", "LAD", "FLA", "MIL", "MIN", "NYM", "NYY", "OAK",   "PHI","PIT","SDP","SEA","SFG","STL","TBD","TEX","TOR","WSN")
+Teams__2022 <- data.frame(franchID, Teams_2022)
+Teams___2022 <- select(Teams__2022, franchID,HR, ER, tSho, H, BB, SO)
+Teams2022Rename <- Teams___2022 %>%
+  rename(HRA = HR, ER = ER, SHO = tSho, HA = H, BBA = BB, SOA = SO)
+head(Teams2022Rename)
+```
+
+**Predicting** 
+predicting 2022 home run against for each team
+```{r}
+predictions2 <- predict(fit6, Teams2022Rename)
+head(predictions2)
+```
+
+```{r}
+predictDF2022 <- data.frame(Teams2022Rename, predictions2)
+RevisedTeams2DF2022 <- select(predictDF2022, "franchID", "HRA", "predictions2")
+RevisedTeams2DF2022$roundedPredictions2 <- round(RevisedTeams2DF2022$predictions2, 0)
+RevisedTeams2DF2022$TF <- RevisedTeams2DF2022$HRA == RevisedTeams2DF2022$roundedPredictions2
+print(RevisedTeams2DF2022)
+```
+**Results for 2022**
+```{r}
+results2022 <- RevisedTeams2DF2022 %>%
+  group_by(TF) %>%
+  summarize(count = n())
+results2022
+```
+**predictions vs actual values for 2022**
+```{r}
+g <- ggplot(data = RevisedTeams2DF2022, aes(x = roundedPredictions2, y = HRA, col = franchID)) +
+  geom_point() + geom_abline(intercept = 0, slope = 1, color = "red",alpha = 0.5, linewidth = 2)
+g
+```
+```{r}
+df <- RevisedTeams2DF2022[c(1,3,6,7,8,10,11,12,13,14,15,16,17,18,19,20,23,24,26,27,28,29),]
+df
+```
+
+The table shows all of the predictions that were within 20 home runs against
+as the real value which was 22 out of the 30 teams. I think that this is pretty
+good and shows that the regression model does a decent job of giving us an idea
+of how many home runs a team will give up in a given year.
+
+# Conclusion 
+In conclusion I was able to answer my question from the beginning of seeing if 
+I could accurately predict how many home runs each team will give up in 2022.
+My predictions weren't as accurate as I would've liked but, I know what to do
+next time in order to get a more accurate predictive model.I think that to make
+this model better I would've fed it more information from the beginning instead
+of limiting the years to only 2005-2021. I think that if I would've given a year
+range from 1985 - 2021 my model would've been better because it would've had 
+more information to go off of. Overall, I think that my predictions for home 
+runs against in 2022 for each team give a solid idea of the real value is.
+
+# References
+https://www.baseball-reference.com/leagues/majors/2022.shtml#all_teams_standard_pitching
